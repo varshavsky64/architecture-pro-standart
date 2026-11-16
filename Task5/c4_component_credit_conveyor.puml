@@ -1,0 +1,55 @@
+@startuml
+!pragma layout smetana
+!$LEGEND_TITLE_TEXT = "Легенда"
+!include <C4/C4_Component>
+
+title Заявка на кредит онлайн — компоненты Кредитного конвейера (C4, уровень 3)
+
+UpdateElementStyle("person", $legendText="участник процесса")
+UpdateElementStyle("system", $legendText="система банка")
+UpdateElementStyle("external_system", $legendText="внешняя система")
+UpdateElementStyle("container", $legendText="контейнер")
+UpdateElementStyle("component", $legendText="компонент")
+UpdateBoundaryStyle($elementName="container", $legendText="граница контейнера")
+AddElementTag("new", $bgColor="#2e7d32", $borderColor="#1b5e20", $legendText="новое")
+AddElementTag("changed", $borderColor="#ff9800", $borderThickness="4", $legendText="дорабатывается")
+
+Person(credit, "Сотрудник отдела кредитования")
+Person(front, "Сотрудник отделения")
+
+ContainerQueue(kafka, "Kafka", "Apache Kafka", "credit.applications, credit.identification, credit.application-status, credit.products, credit.scoring-results")
+
+Container_Boundary(conv, "Кредитный конвейер [Camunda BPM, Java]") {
+  Component(adapter, "Адаптер онлайн-заявок", "Java, Kafka-клиент", "Запускает процесс по онлайн-заявке, передаёт в процесс отметку об идентификации", $tags="new")
+  Component(process, "Процесс «Онлайн-заявка на кредит»", "BPMN, Camunda", "Предодобренная — упрощённая проверка, обычная — полный скоринг, с сайта — ждёт идентификации", $tags="new")
+  Component(tasklist, "Рабочее место кредитного сотрудника", "Camunda Tasklist", "Задачи по заявкам и решение")
+  Component(scoring_call, "Вызов скоринга", "Java delegate", "Полный и упрощённый скоринг", $tags="changed")
+  Component(publisher, "Публикатор событий", "Java, Kafka-клиент", "Статусы заявок и изменения условий кредитов", $tags="new")
+  Component(abs_batch, "Суточный обмен с АБС", "Интеграция через БД", "Как сейчас: заявки отделений из АБС, одобренные заявки в АБС")
+}
+
+ContainerDb(conv_db, "БД конвейера", "Oracle", "Заявки, процессы, условия кредитов")
+Container(scoring, "Система кредитного скоринга", "Python, Flask, PostgreSQL", "Новое: упрощённый скоринг, публикация результатов скоринга в Kafka", $tags="changed")
+System_Ext(bki, "Бюро кредитных историй", "REST API")
+System(abs, "АБС и сервис интеграции АБС", "Новое: заявки с сайта для отделений и отметка об идентификации. Зачисление кредита — как сейчас", $tags="changed")
+
+Rel_U(kafka, adapter, "UC2, UC5: заявки; UC3: идентификация", "Kafka")
+Rel(adapter, process, "UC2, UC5: запуск процесса; UC3: идентификация")
+Rel(credit, tasklist, "UC3, UC5: рассматривает заявку, принимает решение")
+Rel(tasklist, process, "UC3, UC5: задача выполнена")
+Rel(process, scoring_call, "UC3, UC5: нужен скоринг")
+Rel(scoring_call, scoring, "UC3, UC5: скоринг", "REST/HTTPS")
+Rel(scoring, bki, "UC3, UC5: кредитная история", "REST/HTTPS")
+Rel(scoring, kafka, "UC7: результаты скоринга", "Kafka")
+Rel(process, publisher, "UC6: смена статуса")
+Rel(publisher, kafka, "UC6: статусы; UC7: условия", "Kafka")
+Rel(process, conv_db, "данные", "JDBC")
+Rel(abs_batch, conv_db, "данные", "JDBC")
+Rel(abs_batch, abs, "UC6: одобренные заявки на зачисление, раз в сутки", "БД")
+
+Rel(kafka, abs, "UC2: заявки с сайта для отделений", "Kafka")
+Rel(front, abs, "UC3: находит заявку с сайта, идентифицирует клиента")
+Rel(abs, kafka, "UC3: клиент идентифицирован", "Kafka")
+
+SHOW_LEGEND()
+@enduml

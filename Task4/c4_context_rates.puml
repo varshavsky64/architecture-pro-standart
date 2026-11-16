@@ -1,0 +1,36 @@
+@startuml
+!pragma layout smetana
+!$LEGEND_TITLE_TEXT = "Легенда"
+!include <C4/C4_Context>
+
+title Передача ставок в кол-центр и партнёрский кол-центр — диаграмма контекста (C4, уровень 1)
+
+UpdateElementStyle("person", $legendText="участник процесса")
+UpdateElementStyle("system", $legendText="система банка")
+UpdateElementStyle("external_system", $legendText="внешняя система")
+AddElementTag("new", $bgColor="#2e7d32", $borderColor="#1b5e20", $legendText="новая система")
+AddElementTag("changed", $borderColor="#ff9800", $borderThickness="4", $legendText="система дорабатывается")
+
+Person(client, "Клиент", "Звонит уточнить условия депозита")
+Person(operator, "Оператор кол-центра банка")
+Person(p_operator, "Оператор партнёрского кол-центра")
+Person(credit, "Сотрудник отдела кредитования", "Ведёт ставки в АБС")
+Person(it_duty, "Дежурный IT-отдела")
+
+System(abs, "АБС", "Источник ставок (ADR-1). Новое в сервисе интеграции депозитов: API ставок и выгрузка файла ставок", $tags="changed")
+System(cc, "Система кол-центра", "Платформа подрядчика. Новое: ставки по депозитам для оператора", $tags="changed")
+System(sftp, "SFTP-сервер банка", "В DMZ. Папка с файлами ставок для партнёра", $tags="new")
+System_Ext(partner, "Система партнёрского кол-центра", "Внешняя. Новое у партнёра: загрузка файла ставок", $tags="changed")
+
+Rel(client, operator, "UC1: звонок")
+Rel(client, p_operator, "UC3: звонок")
+Rel(operator, cc, "UC1: смотрит ставки")
+Rel(p_operator, partner, "UC3: смотрит ставки")
+Rel(credit, abs, "UC2: меняет ставки")
+Rel(cc, abs, "UC1: ставки", "REST/HTTPS")
+Rel(abs, sftp, "UC2: файл ставок", "SFTP")
+Rel(partner, sftp, "UC3: забирает файл ставок", "SFTP")
+Rel(abs, it_duty, "UC2: оповещение о сбое выгрузки")
+
+SHOW_LEGEND()
+@enduml

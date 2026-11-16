@@ -1,0 +1,43 @@
+@startuml
+!pragma layout smetana
+!$LEGEND_TITLE_TEXT = "Легенда"
+!include <C4/C4_Context>
+
+title Открытие депозитов онлайн, MVP — диаграмма контекста (C4, уровень 1)
+
+UpdateElementStyle("person", $legendText="участник процесса")
+UpdateElementStyle("system", $legendText="система банка")
+UpdateElementStyle("external_system", $legendText="внешняя система")
+AddElementTag("changed", $borderColor="#ff9800", $borderThickness="4", $legendText="система дорабатывается")
+
+Person(client, "Клиент", "Новый клиент на сайте или клиент банка в интернет-банке")
+Person(operator, "Оператор кол-центра")
+Person(front, "Сотрудник отделения", "Фронт-офис")
+Person(depo, "Менеджер бэк-офиса депозитов")
+Person(credit, "Сотрудник отдела кредитования", "Бэк-офис кредитов")
+
+System(site, "Сайт", "PHP, React.js. Новое: депозиты со ставками и заявка на депозит", $tags="changed")
+System(ib, "Интернет-банк", "Монолит на платформе подрядчика и новые сервисы депозитов. Новое: депозиты, персональные ставки, заявка с подтверждением по СМС, статус заявки", $tags="changed")
+System(cc, "Система кол-центра", "Платформа подрядчика. Новое: заявки с сайта", $tags="changed")
+System(abs, "АБС", "Счета, депозиты, бухгалтерия. Новое: ставки и их согласование, приём онлайн-заявок", $tags="changed")
+System(sms, "СМС-шлюз", "Сопровождает IT-отдел банка")
+System_Ext(telecom, "Телеком-оператор", "Доставка СМС")
+
+Rel(client, site, "UC1, UC2: депозиты и ставки, заявка на депозит", "HTTPS")
+Rel(client, ib, "UC3, UC4: депозиты и персональные ставки, заявка, статус", "HTTPS")
+Rel(site, ib, "UC1, UC2: ставки, заявка с сайта", "REST/HTTPS")
+Rel(ib, cc, "UC2: заявка с сайта", "Kafka")
+Rel(operator, cc, "UC2: звонок клиенту по заявке с сайта")
+Rel(cc, abs, "UC2: обращение на особые условия, как сейчас")
+Rel(ib, abs, "UC4: заявки на депозит", "Kafka, асинхронно")
+Rel(abs, ib, "UC5, UC6: статусы заявок, ставки, персональные надбавки", "Kafka, асинхронно")
+Rel(ib, sms, "UC4, UC5: СМС-код, уведомления о статусе")
+Rel(abs, sms, "UC2: СМС о ставке, как сейчас")
+Rel(sms, telecom, "СМС")
+Rel_Back(client, telecom, "СМС")
+Rel(front, abs, "UC2: идентификация и открытие депозита")
+Rel(depo, abs, "UC5, UC7: онлайн-заявки, специальные ставки")
+Rel(credit, abs, "UC6, UC7: ставки, кредитный риск клиента")
+
+SHOW_LEGEND()
+@enduml

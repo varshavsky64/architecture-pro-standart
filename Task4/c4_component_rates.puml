@@ -1,0 +1,63 @@
+@startuml
+!pragma layout smetana
+!$LEGEND_TITLE_TEXT = "Легенда"
+!include <C4/C4_Component>
+
+title Передача ставок в кол-центр и партнёрский кол-центр — диаграмма компонентов (C4, уровень 3)
+
+UpdateElementStyle("person", $legendText="участник процесса")
+UpdateElementStyle("external_system", $legendText="внешняя система")
+UpdateElementStyle("container", $legendText="контейнер")
+UpdateElementStyle("component", $legendText="компонент")
+UpdateBoundaryStyle($elementName="container", $legendText="граница контейнера")
+AddElementTag("new", $bgColor="#2e7d32", $borderColor="#1b5e20", $legendText="новое")
+AddElementTag("changed", $borderColor="#ff9800", $borderThickness="4", $legendText="дорабатывается")
+
+Person(operator, "Оператор кол-центра банка")
+Person(p_operator, "Оператор партнёрского кол-центра")
+Person(it_duty, "Дежурный IT-отдела")
+
+ContainerDb(abs_db, "БД АБС", "Oracle, PL/SQL", "Ставки по депозитам и таблица исходящих событий (ADR-1)")
+
+Container_Boundary(abs_int, "Сервис интеграции депозитов (АБС) [Java, Spring Boot]") {
+  Component(outbox, "Читатель исходящих событий", "Spring Scheduler, JDBC", "Раз в 30 с забирает изменения ставок из таблицы исходящих событий АБС", $tags="changed")
+  Component(repo, "Репозиторий ставок", "Spring Data JDBC", "Текущая копия ставок и журнал выгрузок", $tags="new")
+  Component(api, "API ставок", "Spring Web, REST", "GET /api/v1/deposit-rates: продукты, сроки, суммы, ставки, время актуальности", $tags="new")
+  Component(sched, "Планировщик выгрузок", "Spring Scheduler", "Запускает выгрузку при изменении ставок и каждый день в 07:00", $tags="new")
+  Component(builder, "Формирователь файла ставок", "Java, CSV", "Собирает файл в согласованном с партнёром формате", $tags="new")
+  Component(uploader, "Выгрузка на SFTP", "Spring Integration SFTP", "Пишет файл под временным именем и переименовывает, при ошибке повторяет", $tags="new")
+  Component(alerts, "Метрики и оповещения", "Spring Boot Actuator", "Сообщает дежурному о неудачной выгрузке", $tags="new")
+}
+
+ContainerDb(int_db, "БД сервиса интеграции", "PostgreSQL", "Копия ставок, журнал выгрузок", $tags="new")
+
+Container_Boundary(cc, "Система кол-центра [платформа подрядчика]") {
+  Component(cc_ui, "Виджет ставок", "React.js", "Показывает оператору ставки и время их актуальности", $tags="new")
+  Component(cc_rates, "Модуль ставок", "Java, Spring Boot; расширение платформы", "Запрашивает ставки у API и кэширует на 5 минут", $tags="new")
+}
+
+Container(sftp, "SFTP-сервер банка", "OpenSSH, DMZ", "Папка партнёра: доступ по ключу и с разрешённых IP, только чтение, журнал скачиваний", $tags="new")
+System_Ext(partner, "Система партнёрского кол-центра", "Раз в 15 минут забирает новый файл и показывает ставки операторам", $tags="changed")
+
+Rel(outbox, abs_db, "UC2: читает изменения ставок", "JDBC")
+Rel(outbox, repo, "UC2: обновляет копию ставок")
+Rel(outbox, sched, "UC2: ставки изменились")
+Rel(repo, int_db, "Чтение и запись", "JDBC")
+Rel(api, repo, "UC1: читает ставки")
+Rel(sched, builder, "UC2: сформировать файл")
+Rel(builder, repo, "UC2: читает ставки")
+Rel(builder, uploader, "UC2: файл ставок")
+Rel(uploader, sftp, "UC2: выгружает файл", "SFTP")
+Rel(uploader, repo, "UC2: результат выгрузки")
+Rel(uploader, alerts, "UC2: ошибка выгрузки")
+Rel(alerts, it_duty, "UC2: оповещение", "почта, мессенджер")
+
+Rel(operator, cc_ui, "UC1: смотрит ставки")
+Rel(cc_ui, cc_rates, "UC1: ставки")
+Rel(cc_rates, api, "UC1: ставки", "REST/HTTPS")
+
+Rel(partner, sftp, "UC3: забирает файл", "SFTP")
+Rel(p_operator, partner, "UC3: смотрит ставки")
+
+SHOW_LEGEND()
+@enduml
