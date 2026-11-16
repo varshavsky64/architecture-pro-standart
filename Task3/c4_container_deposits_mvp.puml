@@ -1,0 +1,70 @@
+@startuml
+!pragma layout smetana
+!$LEGEND_TITLE_TEXT = "Легенда"
+!include <C4/C4_Container>
+
+title Открытие депозитов онлайн, MVP — диаграмма контейнеров (C4, уровень 2)
+
+UpdateElementStyle("person", $legendText="участник процесса")
+UpdateElementStyle("system", $legendText="система банка")
+UpdateElementStyle("external_system", $legendText="внешняя система")
+UpdateElementStyle("container", $legendText="контейнер")
+UpdateBoundaryStyle($elementName="system", $legendText="граница системы")
+AddElementTag("new", $bgColor="#2e7d32", $borderColor="#1b5e20", $legendText="новый контейнер")
+AddElementTag("changed", $borderColor="#ff9800", $borderThickness="4", $legendText="дорабатывается")
+
+Person(client, "Клиент")
+Person(operator, "Оператор кол-центра")
+Person(front, "Сотрудник отделения")
+Person(depo, "Менеджер бэк-офиса депозитов")
+Person(credit, "Сотрудник отдела кредитования")
+
+System(site, "Сайт", "PHP, React.js. Новое: раздел депозитов и форма заявки", $tags="changed")
+System(cc, "Система кол-центра", "Java Spring Boot, PostgreSQL; платформа подрядчика. Новое: приём заявок с сайта через механизмы расширения", $tags="changed")
+System(sms, "СМС-шлюз", "Сопровождает IT-отдел банка")
+System_Ext(telecom, "Телеком-оператор")
+
+System_Boundary(ib, "Интернет-банк") {
+  Container(ib_web, "Веб-приложение ИБ", "ASP.NET MVC 4.5, .NET Framework 4.5; платформа подрядчика", "Монолит. Новый раздел «Депозиты» делает команда банка, ядро не меняется", $tags="changed")
+  ContainerDb(ib_db, "БД ИБ", "MS SQL", "Пользователи ИБ, платежи")
+  Container(dep_svc, "Сервис депозитов", "C#, ASP.NET Core (.NET 8)", "API для ИБ и сайта: продукты, ставки, персональные ставки, заявки и их статусы. Через него ИБ работает с Kafka", $tags="new")
+  ContainerDb(dep_db, "БД сервиса депозитов", "MS SQL", "Копия ставок, персональные надбавки, заявки и статусы", $tags="new")
+  Container(sms_svc, "Сервис СМС", "C#, ASP.NET Core (.NET 8)", "Одноразовые коды подтверждения и СМС о статусе заявки", $tags="new")
+  ContainerDb(sms_db, "БД сервиса СМС", "MS SQL", "Коды подтверждения, журнал отправки", $tags="new")
+}
+
+ContainerQueue(kafka, "Kafka", "Apache Kafka", "Топики: заявки с сайта, заявки ИБ, статусы заявок, ставки и персональные надбавки", $tags="new")
+
+System_Boundary(abs, "АБС") {
+  Container(abs_int, "Сервис интеграции депозитов", "Java, Spring Boot", "Создаёт онлайн-заявки в АБС с ограничением скорости, публикует статусы, ставки и персональные надбавки", $tags="new")
+  ContainerDb(abs_db, "БД АБС", "Oracle, логика на PL/SQL", "Счета и депозиты. Новое: ставки и их согласование, онлайн-заявки, PL/SQL-API, таблица исходящих событий, ночной расчёт персональных надбавок", $tags="changed")
+  Container(abs_client, "Клиент АБС", "Delphi", "Рабочее место сотрудников. Новое: ведение ставок, согласование специальных ставок, онлайн-заявки", $tags="changed")
+}
+
+Rel(client, site, "UC1, UC2", "HTTPS")
+Rel(client, ib_web, "UC3, UC4, UC5: депозиты, заявка, статус", "HTTPS")
+Rel(site, dep_svc, "UC1: ставки; UC2: заявка с сайта", "REST/HTTPS")
+Rel(ib_web, dep_svc, "UC3, UC4, UC5: продукты, ставки, заявка, статус", "REST/HTTPS")
+Rel(ib_web, ib_db, "Данные пользователя ИБ", "ADO.NET")
+Rel(dep_svc, dep_db, "Чтение и запись", "ADO.NET")
+Rel(dep_svc, sms_svc, "UC4: отправить и проверить код; UC5: уведомить клиента", "REST/HTTPS")
+Rel(sms_svc, sms_db, "Чтение и запись", "ADO.NET")
+Rel(sms_svc, sms, "UC4, UC5: СМС", "HTTPS, API шлюза")
+Rel(sms, telecom, "СМС")
+Rel_Back(client, telecom, "СМС")
+
+BiRel(dep_svc, kafka, "UC2, UC4: заявки; UC5, UC6: статусы, ставки, надбавки", "Kafka")
+Rel(kafka, cc, "UC2: заявка с сайта", "Kafka")
+BiRel(abs_int, kafka, "UC4: заявки; UC5, UC6: статусы, ставки, надбавки", "Kafka")
+Rel(abs_int, abs_db, "UC4: создание заявки через PL/SQL-API; UC5, UC6: чтение исходящих событий", "JDBC")
+
+Rel(operator, cc, "UC2: звонок клиенту по заявке")
+Rel(cc, abs_db, "UC2: обращение на особые условия, как сейчас")
+Rel(abs_db, sms, "UC2: СМС о ставке, как сейчас")
+Rel(front, abs_client, "UC2: идентификация и открытие депозита")
+Rel(depo, abs_client, "UC5, UC7: онлайн-заявки, специальные ставки")
+Rel(credit, abs_client, "UC6, UC7: ставки, кредитный риск клиента")
+Rel(abs_client, abs_db, "Чтение и запись", "Oracle Net")
+
+SHOW_LEGEND()
+@enduml
