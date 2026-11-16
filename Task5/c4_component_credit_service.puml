@@ -1,0 +1,61 @@
+@startuml
+!pragma layout smetana
+!$LEGEND_TITLE_TEXT = "Легенда"
+!include <C4/C4_Component>
+
+title Заявка на кредит онлайн — компоненты сервиса кредитов интернет-банка (C4, уровень 3)
+
+UpdateElementStyle("person", $legendText="участник процесса")
+UpdateElementStyle("system", $legendText="система банка")
+UpdateElementStyle("external_system", $legendText="внешняя система")
+UpdateElementStyle("container", $legendText="контейнер")
+UpdateElementStyle("component", $legendText="компонент")
+UpdateBoundaryStyle($elementName="container", $legendText="граница контейнера")
+AddElementTag("new", $bgColor="#2e7d32", $borderColor="#1b5e20", $legendText="новое")
+AddElementTag("changed", $borderColor="#ff9800", $borderThickness="4", $legendText="дорабатывается")
+
+Person(client, "Клиент")
+System(site, "Сайт", "PHP, React.js. Новое: кредитные предложения и заявка", $tags="changed")
+Container(ib_web, "Веб-приложение ИБ", "ASP.NET MVC 4.5", "Новый раздел «Кредиты»", $tags="changed")
+
+Container_Boundary(credit_svc, "Сервис кредитов (интернет-банк) [C#, ASP.NET Core .NET 8]") {
+  Component(api, "API кредитов", "ASP.NET Core Web API", "REST для ИБ и сайта: условия, предложения, предварительное решение, заявки, статусы", $tags="new")
+  Component(catalog, "Каталог кредитных продуктов", "C#", "Копия условий кредитов из конвейера", $tags="new")
+  Component(offers, "Предодобренные предложения", "C#", "Предложения по сохранённым результатам прошлых скорингов", $tags="new")
+  Component(prelim, "Предварительная оценка", "C#, HTTP-клиент", "Проверяет согласия клиента, вызывает скоринг, хранит результат по паспорту сутки", $tags="new")
+  Component(apps, "Заявки", "C#", "Создаёт заявку, запрашивает СМС-код, публикует заявку, хранит статус", $tags="new")
+  Component(events, "Обработчик событий", "C#, Kafka-клиент", "Читает условия, результаты скоринга и статусы заявок", $tags="new")
+}
+
+ContainerDb(credit_db, "БД сервиса кредитов", "MS SQL", "Условия, предложения, заявки, статусы. Паспортные данные зашифрованы", $tags="new")
+Container(sms_svc, "Сервис СМС", ".NET 8", "Из ST-ADR1: коды подтверждения и уведомления")
+ContainerQueue(kafka, "Kafka", "Apache Kafka", "credit.applications, credit.application-status, credit.products, credit.scoring-results")
+Container(scoring, "Система кредитного скоринга", "Python, Flask, PostgreSQL", "Новое: предварительная оценка нового клиента по данным БКИ", $tags="changed")
+System_Ext(bki, "Бюро кредитных историй", "REST API")
+
+Rel(client, site, "UC1, UC2", "HTTPS")
+Rel(client, ib_web, "UC4, UC5, UC6", "HTTPS")
+Rel(site, api, "UC1: условия; UC2: предварительное решение, заявка", "REST/HTTPS")
+Rel(ib_web, api, "UC4: условия, предложение; UC5: заявка; UC6: статус", "REST/HTTPS")
+
+Rel(api, catalog, "UC1, UC4: условия")
+Rel(api, offers, "UC4: предложение клиента")
+Rel(api, prelim, "UC2: предварительное решение")
+Rel(api, apps, "UC2, UC5: заявка; UC6: статус")
+
+Rel(prelim, scoring, "UC2: оценка нового клиента", "REST/HTTPS")
+Rel(scoring, bki, "UC2: кредитная история", "REST/HTTPS")
+Rel(apps, sms_svc, "UC5: СМС-код; UC6: СМС о статусе", "REST/HTTPS")
+Rel(apps, kafka, "UC2, UC5: заявка", "Kafka")
+Rel(kafka, events, "UC6: статусы; UC7: условия, результаты скоринга", "Kafka")
+Rel(events, catalog, "UC7: обновляет условия")
+Rel(events, offers, "UC7: обновляет предложения")
+Rel(events, apps, "UC6: новый статус")
+
+Rel(catalog, credit_db, "Чтение и запись", "ADO.NET")
+Rel(offers, credit_db, "Чтение и запись", "ADO.NET")
+Rel(prelim, credit_db, "Чтение и запись", "ADO.NET")
+Rel(apps, credit_db, "Чтение и запись", "ADO.NET")
+
+SHOW_LEGEND()
+@enduml

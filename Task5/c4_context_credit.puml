@@ -1,0 +1,45 @@
+@startuml
+!pragma layout smetana
+!$LEGEND_TITLE_TEXT = "Легенда"
+!include <C4/C4_Context>
+
+title Заявка на кредит онлайн — диаграмма контекста (C4, уровень 1)
+
+UpdateElementStyle("person", $legendText="участник процесса")
+UpdateElementStyle("system", $legendText="система банка")
+UpdateElementStyle("external_system", $legendText="внешняя система")
+AddElementTag("changed", $borderColor="#ff9800", $borderThickness="4", $legendText="система дорабатывается")
+
+Person(client, "Клиент", "Новый клиент на сайте или клиент банка в интернет-банке")
+Person(front, "Сотрудник отделения", "Фронт-офис")
+Person(credit, "Сотрудник отдела кредитования", "Бэк-офис кредитов")
+
+System(site, "Сайт", "Новое: кредитные предложения, заявка с паспортными данными и предварительным решением", $tags="changed")
+System(ib, "Интернет-банк", "Новое: сервис кредитов — условия, предодобренные предложения, заявки и их статусы для ИБ и сайта", $tags="changed")
+System(conv, "Кредитный конвейер", "Camunda BPM, Oracle. Новое: процесс онлайн-заявки, обмен через Kafka", $tags="changed")
+System(scoring, "Система кредитного скоринга", "Python, Flask, PostgreSQL. Новое: предварительная оценка по БКИ, упрощённый скоринг, публикация результатов", $tags="changed")
+System_Ext(bki, "Бюро кредитных историй", "REST API")
+System(abs, "АБС", "Новое: заявки с сайта для отделений и отметка об идентификации", $tags="changed")
+System(sms, "СМС-шлюз")
+System_Ext(telecom, "Телеком-оператор")
+
+Rel(client, site, "UC1, UC2: кредитные предложения, заявка", "HTTPS")
+Rel(client, ib, "UC4, UC5: кредиты, предодобренное предложение, заявка, статус", "HTTPS")
+Rel(site, ib, "UC1, UC2: условия, предварительное решение, заявка", "REST/HTTPS")
+Rel(ib, scoring, "UC2: предварительная оценка нового клиента", "REST/HTTPS")
+Rel(scoring, bki, "UC2, UC3, UC5: кредитная история", "REST/HTTPS")
+Rel(ib, conv, "UC2, UC5: онлайн-заявки", "Kafka")
+Rel(conv, ib, "UC6, UC7: статусы заявок, условия кредитов", "Kafka")
+Rel(scoring, ib, "UC7: результаты скоринга для предодобренных предложений", "Kafka")
+Rel(conv, scoring, "UC3, UC5: скоринг, упрощённый скоринг", "REST/HTTPS")
+Rel(ib, abs, "UC2: заявки с сайта, ожидающие идентификации", "Kafka")
+Rel(abs, conv, "UC3: клиент идентифицирован", "Kafka")
+Rel(conv, abs, "UC6: одобренные заявки на зачисление, раз в сутки, как сейчас", "БД")
+Rel(front, abs, "UC3: находит заявку с сайта, идентифицирует клиента")
+Rel(credit, conv, "UC3, UC5: рассматривает заявку, принимает решение")
+Rel(ib, sms, "UC2, UC5, UC6: СМС-код, уведомления")
+Rel(sms, telecom, "СМС")
+Rel_Back(client, telecom, "СМС")
+
+SHOW_LEGEND()
+@enduml
